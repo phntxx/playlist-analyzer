@@ -1,0 +1,3 @@
+textual>=0.3.0    # required for fancy output
+spotipy>=2.21.0   # spotify api wrapper
+pyyaml>=6.0       # required for config file handling

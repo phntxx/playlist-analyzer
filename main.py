@@ -4,12 +4,13 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy import Spotify, SpotifyException
 
 from textual.app import App, ComposeResult
-from textual.containers import Content
 from textual.widgets import Header, Input, Static, Footer
 from rich.table import Table
 
 import itertools
 from collections import defaultdict
+
+from datetime import timedelta
 
 class Setup:
 
@@ -53,6 +54,26 @@ class Backend:
     def __init__(self, spotify: Spotify):
         self.spotify = spotify
 
+    def __format(self, data: dict):
+
+        artists = lambda d: list( i["name"] for i in d["artists"])
+        artists_string = lambda d: ", ".join(artists(d))
+
+        to_percent = lambda f: f"{ round(f * 100, 1) }%"
+        to_bpm = lambda t: f"{ round(t, 1)}bpm"
+        to_time = lambda t: str(timedelta(milliseconds=t))
+        x_or_o = lambda s: "x" if s else "o"
+
+        return {
+            "name": data['name'],
+            "artists": artists_string(data),
+            "duration": to_time(data["duration_ms"]),
+            "explicit": x_or_o(data["explicit"]),
+            "tempo": to_bpm(data["tempo"]),
+            "energy": to_percent(data["energy"]),
+            "danceability": to_percent(data["danceability"])
+        }
+
     def get_playlist_info(self, playlist_url: str):
         results = self.spotify.playlist_tracks(playlist_id=playlist_url)
         track_infos = list( i["track"] for i in results["items"] )
@@ -62,7 +83,16 @@ class Backend:
 
         merged_values = Utils.merge("id", track_infos, track_analytics).values()
 
-        return merged_values
+        return (self.__format(i) for i in merged_values)
+
+    def get_track_info(self, track_url: str):
+        track_info = self.spotify.track(track_id=track_url)
+        track_analytics = self.spotify.audio_features(track_info["id"])
+
+        merged_values = track_info.copy()
+        merged_values.update(track_analytics[0])
+
+        return self.__format(merged_values)
 
 
 class Analyzer(App):
@@ -85,24 +115,29 @@ class Analyzer(App):
     self.dark = not self.dark
 
   async def on_input_submitted(self, message: Input.Submitted) -> None:
+    static = self.query_one("#results", Static)
 
     try:
-      data = self.backend.get_playlist_info(message.value)
+
+        if "track" in message.value:
+            data = [self.backend.get_track_info(message.value)]
+        elif "playlist" in message.value:
+            data = self.backend.get_playlist_info(message.value)
+        else:
+            raise SpotifyException
+
     except SpotifyException:
-      self.panic("Error: Invalid URL")
-      quit()
-
-    artists = lambda d: list( i["name"] for i in d["artists"])
-    artists_string = lambda d: ", ".join(artists(d))
-
+      static.update("Error: Invalid URL")
+      return 
+  
     columns = ("Name", "Artist", "Time", "Explicit", "Tempo", "Energy", "Danceability")
-    rows = ((i["name"], artists_string(i), str(i["duration_ms"]), "x" if i["explicit"] else "o", str(i["tempo"]), str(i["energy"]), str(i["danceability"])) for i in data)
 
     table = Table(*columns)
-    for row in rows:
-      table.add_row(*row) 
-      
-    self.query_one("#results", Static).update(table)
+
+    for row in data:
+        table.add_row(*tuple(row.values()))
+
+    static.update(table)
 
 
 if __name__ == "__main__":

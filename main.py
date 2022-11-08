@@ -62,7 +62,7 @@ class Backend:
         to_percent = lambda f: f"{ round(f * 100, 1) }%"
         to_bpm = lambda t: f"{ round(t, 1)}bpm"
         to_time = lambda t: str(timedelta(milliseconds=t))
-        x_or_o = lambda s: "x" if s else "o"
+        x_or_o = lambda s: "y" if s else "n"
 
         return {
             "name": data['name'],
@@ -107,7 +107,7 @@ class Analyzer(App):
 
   def compose(self) -> ComposeResult:
     yield Header()
-    yield Input(placeholder="Spotify playlist URL")
+    yield Input(placeholder="Spotify URL")
     yield Static(id="results")
     yield Footer()
 
